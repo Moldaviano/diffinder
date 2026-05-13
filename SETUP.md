@@ -165,43 +165,139 @@ migrate create -ext sql -dir migrations -seq nome_modifica
 
 ## 7. Configurare il webhook GitHub
 
-Sul **repository GitHub** del progetto che vuoi tracciare:
+I workflow versionati e il README operativo stanno in [`docs/github-actions/`](docs/github-actions/). Due varianti disponibili:
 
-1. Settings → Secrets and variables → Actions → New repository secret
-   - `DIFFINDER_WEBHOOK_SECRET` = stesso valore di `GITHUB_WEBHOOK_SECRET` nel `.env`
-   - `DIFFINDER_URL` = URL pubblico del backend (es. `https://diffinder.tuodominio.it`)
-2. Copia il workflow di esempio:
+- **`diffinder-notify.yml`** — notify-only. Manda l'evento a Diffinder ma non blocca mai il PR (`continue-on-error: true`). **Usalo come primo step.**
+- **`diffinder-cert-check.yml`** — fa fallire il PR se Diffinder risponde `passed=false`. Attivalo solo quando il sistema è stabile e i progetti/release sono configurati correttamente.
+
+### 7.1 Prerequisito: esponi il backend pubblicamente
+
+GitHub Actions gira sui runner cloud, non può raggiungere `localhost`. Serve un URL pubblico HTTPS.
+
+**Sviluppo locale — tunnel rapido (Cloudflare Quick Tunnel, gratis, no account)**:
 
 ```bash
-mkdir -p .github/workflows
-cp /percorso/diffinder/docs/github-actions-example.yml \
-   .github/workflows/diffinder-cert-check.yml
+brew install cloudflared
+cloudflared tunnel --url http://localhost:8080
 ```
 
-3. Crea/aggiorna il progetto su Diffinder facendo combaciare `repository_url` con `https://github.com/<owner>/<repo>` (senza trailing slash). Questo è il campo usato dal webhook per risalire al progetto.
-4. Crea su Diffinder una **release** con `branch_name` uguale all'`head_branch` della PR (es. `feature/new-checkout`).
-
-Al primo `pull_request` aperto verso `main`, il workflow:
-
-- compila il payload JSON `{repo, pr_number, head_sha, base_branch, head_branch, pr_url}`
-- calcola `X-Hub-Signature-256: sha256=<HMAC-SHA256>` sul body
-- chiama `POST /api/webhooks/github/pr`
-- legge `{ passed, reason }` e fa fallire la pipeline se `passed=false`
-
-### Testare il webhook in locale
+Cloudflared stampa un URL `https://<random>.trycloudflare.com`. Verifica:
 
 ```bash
-PAYLOAD='{"repo":"https://github.com/alloy/payments-api","pr_number":42,"head_sha":"abc123","base_branch":"main","head_branch":"feature/refund-api","pr_url":"https://x"}'
-SECRET="$(grep ^GITHUB_WEBHOOK_SECRET .env | cut -d= -f2)"
-SIG="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" -hex | awk '{print $2}')"
+curl https://<...>.trycloudflare.com/healthz   # → {"status":"ok"}
+```
+
+Tieni il terminale aperto: chiudendolo il tunnel muore. L'URL **cambia ad ogni restart** (gratis): quando cambia aggiorna il secret `DIFFINDER_URL` su GitHub.
+
+In alternativa: `ngrok http 8080` (richiede account gratuito, ma offre la dashboard live su `http://localhost:4040`).
+
+**Produzione**: usa un dominio stabile (Cloudflare named tunnel, reverse proxy aziendale, VPS).
+
+### 7.2 Per OGNI repo GitHub da tracciare
+
+**Passo 1 — Secrets**: Settings → Secrets and variables → Actions → New repository secret
+
+| Nome | Valore |
+|------|--------|
+| `DIFFINDER_URL` | URL pubblico del backend (es. `https://abc.trycloudflare.com` o `https://diffinder.tuodominio.it`) — senza slash finale |
+| `DIFFINDER_WEBHOOK_SECRET` | **Identico** al `GITHUB_WEBHOOK_SECRET` del `.env` del backend |
+
+Suggerimento: se le repo sono molte, usa un **Organization secret** (Org → Settings → Secrets → Actions) e abilita le repo che servono.
+
+**Passo 2 — Workflow file su tutti i base branch**
+
+⚠️ Regola GitHub fondamentale: per eventi `pull_request`, il workflow eseguito è quello presente **sul base branch della PR**, non sul branch di default. Quindi il file `.github/workflows/diffinder-notify.yml` deve esistere su **ogni branch** che può essere base di una PR.
+
+Per il branch model CAME (`master`, `main`, `test/dev`, `test/staging`):
+
+```bash
+cd <repo-target>
+
+# 1. Mettilo sul branch di default (es. master) come punto di verità
+git checkout master
+mkdir -p .github/workflows
+cp /percorso/diffinder/docs/github-actions/diffinder-notify.yml .github/workflows/
+git add .github/workflows/diffinder-notify.yml
+git commit -m "ci: notifica Diffinder sulle PR"
+git push origin master
+
+# 2. Propaga lo stesso file su tutti gli altri base branch
+for B in main test/dev test/staging; do
+  git push origin master:$B  # se accettato come fast-forward
+done
+
+# Se il push fast-forward è rifiutato (branch con storie divergenti):
+for B in main test/dev test/staging; do
+  git checkout $B
+  git pull
+  git checkout master -- .github/workflows/diffinder-notify.yml
+  git commit -m "ci: workflow Diffinder" && git push origin $B
+done
+```
+
+Verifica che il file sia presente su ogni base branch:
+
+```bash
+REPO="<owner>/<repo>"
+for B in master main test/dev test/staging; do
+  curl -s -o /dev/null -w "$B → HTTP %{http_code}\n" \
+    https://raw.githubusercontent.com/$REPO/$B/.github/workflows/diffinder-notify.yml
+done
+```
+
+**Passo 3 — Configurazione lato Diffinder**
+
+1. Crea/aggiorna il progetto in Diffinder con `repository_url = https://github.com/<owner>/<repo>` **esatto** (no trailing slash, no `.git`). Il match nel webhook è letterale: qualsiasi differenza → 404.
+2. Per ogni branch da tracciare, crea una **Release** con `branch_name = head_branch` della PR (cioè il branch sorgente, non quello di destinazione). Senza una release per quel branch, il webhook risponde 404 "no release tracked for branch ...".
+
+**Passo 4 — Trigger di prova**
+
+```bash
+git checkout master
+git checkout -b feature/diffinder-smoke
+echo "ping" >> README.md
+git add README.md && git commit -m "test diffinder"
+git push -u origin feature/diffinder-smoke
+gh pr create --base master --title "Smoke Diffinder" --body "test"
+```
+
+Verifica in 4 punti:
+
+1. Tab Actions della repo → run `diffinder-notify` con conclusion `success`
+2. Dashboard tunnel (ngrok: `localhost:4040`) → richiesta in arrivo
+3. Log backend: `docker compose logs -f backend | grep webhooks` → riga `path:"/api/webhooks/github/pr"`
+4. UI Diffinder (`/pull-requests`) → la PR appare con stato (es. `blocked` se non c'è ancora un deploy cert)
+
+### 7.3 Comportamento del workflow
+
+- Eventi tracciati: `opened`, `synchronize`, `reopened`, `closed`, `ready_for_review`, `edited`
+- Filtra le PR per base branch (default `master`, `main`, `test/dev`, `test/staging` — modificabile)
+- `concurrency`: push consecutivi sulla stessa PR cancellano i run vecchi → niente webhook duplicati
+- Su risposte non-200 dal backend logga un `::warning::` (notify-only) o un `::error::` (cert-check)
+
+### 7.4 Testare il webhook senza GitHub (in locale)
+
+Utile per debug isolato dal layer Actions/tunnel. Body e firma devono combaciare byte-per-byte:
+
+```bash
+SECRET="$(grep ^GITHUB_WEBHOOK_SECRET .env | cut -d= -f2-)"
+BODY='{"repo":"https://github.com/alloy/payments-api","pr_number":42,"head_sha":"abc1234567890abcdef","base_branch":"master","head_branch":"feature/refund","pr_url":"https://x"}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" -hex | awk '{print $2}')
 
 curl -i -X POST http://localhost:8080/api/webhooks/github/pr \
   -H "Content-Type: application/json" \
-  -H "X-Hub-Signature-256: $SIG" \
-  -d "$PAYLOAD"
+  -H "X-Hub-Signature-256: sha256=$SIG" \
+  -d "$BODY"
 ```
 
-Risposta attesa: `{"passed":false,"reason":"head ... not present in cert snapshot ..."}` (perché `abc123` non è il SHA che c'è in cert).
+Esiti possibili (vedi anche `docs/github-actions/README.md` per la tabella completa):
+
+| HTTP | Significato |
+|------|-------------|
+| `200 {"passed":false,"reason":"no cert deployment..."}` | Tutto OK end-to-end (il `passed:false` è atteso senza un deploy cert) |
+| `401 invalid signature` | `SECRET` lato curl ≠ `GITHUB_WEBHOOK_SECRET` nel backend |
+| `404 project not registered for repo` | `repository_url` non combacia con un progetto in Diffinder |
+| `404 no release tracked for branch` | Manca la release con quel `branch_name` |
 
 ## 8. Build di produzione
 
@@ -279,7 +375,7 @@ docker compose exec backend /app/seed
 | `DB_SSLMODE` | `disable` | no | `disable\|require\|verify-full` |
 | `DB_MAX_CONNS` | `10` | no | Pool size massimo |
 | `JWT_SECRET` | — | **sì** | HS256, ≥16 caratteri |
-| `JWT_ACCESS_TTL` | `15m` | no | Durata access token |
+| `JWT_ACCESS_TTL` | `15m` (override compose: `2h`) | no | Durata access token |
 | `JWT_REFRESH_TTL` | `168h` | no | Durata refresh token (7gg) |
 | `GITHUB_WEBHOOK_SECRET` | — | **sì** | Secret HMAC condiviso |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:4200` | no | CSV di origini consentite |

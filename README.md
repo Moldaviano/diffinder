@@ -34,7 +34,7 @@ Vedi `.env.example`. Le più rilevanti:
 | Variabile | Descrizione |
 |-----------|-------------|
 | `JWT_SECRET` | Chiave HS256 (≥16 char). `openssl rand -base64 48` |
-| `JWT_ACCESS_TTL` | TTL access token (es. `15m`) |
+| `JWT_ACCESS_TTL` | TTL access token (default Go `15m`, compose override `2h`) |
 | `JWT_REFRESH_TTL` | TTL refresh token (es. `168h`) |
 | `GITHUB_WEBHOOK_SECRET` | Secret HMAC per `X-Hub-Signature-256` |
 | `CORS_ALLOWED_ORIGINS` | CSV di origini consentite |
@@ -45,7 +45,7 @@ Vedi `.env.example`. Le più rilevanti:
 1. Lo sviluppatore crea una **Release** su un branch e la sposta in **dev** registrando un `DeploymentEvent`.
 2. Quando la release entra in **cert**, oltre al `DeploymentEvent` viene catturato un set di `CommitSnapshot` con tutti i commit presenti nel branch in quel momento.
 3. Allo `commit_sha` del deploy in cert ci si riferisce come "**cert HEAD**" per quella release.
-4. Quando si apre una PR verso prod, GitHub Actions invia un webhook `POST /api/webhooks/github/pr` firmato con `X-Hub-Signature-256`. Il payload contiene `repo`, `pr_number`, `head_sha`, `base_branch`.
+4. Quando si apre/aggiorna una PR verso uno dei branch tracciati (`master`, `main`, `test/dev`, `test/staging` — configurabili nel workflow), GitHub Actions invia un webhook `POST /api/webhooks/github/pr` firmato con `X-Hub-Signature-256`. Il payload contiene `repo`, `pr_number`, `head_sha`, `base_branch`, `head_branch`, `pr_url`.
 5. Il backend cerca la release corrispondente al repo + branch, recupera il cert HEAD e verifica che `head_sha` sia **discendente o uguale** al cert HEAD (cioè che tutti i commit fra cert HEAD e head_sha siano stati testati). Tecnicamente: `head_sha` deve essere presente nello snapshot **oppure** il cert HEAD deve essere ancestor di `head_sha`. La semplificazione che adottiamo (poiché non abbiamo l'accesso git diretto) è: il check passa se `head_sha == cert_head_sha`. Diversamente l'esito è `passed=false` con dettagli.
 6. Il risultato viene salvato in `CertificationCheck` e ritornato a GitHub Actions come `{ passed, reason }`. Se `passed=false` la PR viene marcata `blocked`.
 
@@ -97,4 +97,12 @@ go run ./cmd/server
 # 5. Frontend
 cd frontend && npm install && npm start
 ```
-ping
+
+## Webhook GitHub
+
+Per attivare la notifica delle PR da una repo GitHub vedi [`docs/github-actions/README.md`](docs/github-actions/README.md). Sintesi:
+
+- Copia `docs/github-actions/diffinder-notify.yml` in `.github/workflows/` **su tutti i branch che possono essere base di una PR** (es. `main`, `master`, `test/dev`, `test/staging`).
+- Aggiungi i due secret repo `DIFFINDER_URL` e `DIFFINDER_WEBHOOK_SECRET` (quest'ultimo identico a `GITHUB_WEBHOOK_SECRET` del backend).
+- Registra il progetto in Diffinder con `repository_url` esatto e crea la Release con `branch_name = head_branch` della PR.
+- In dev locale esponi il backend con un tunnel (`cloudflared tunnel --url http://localhost:8080`) e usa l'URL come `DIFFINDER_URL`.
