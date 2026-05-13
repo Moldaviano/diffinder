@@ -97,3 +97,4 @@ go run ./cmd/server
 # 5. Frontend
 cd frontend && npm install && npm start
 ```
+ping

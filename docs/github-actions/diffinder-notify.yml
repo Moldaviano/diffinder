@@ -27,12 +27,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed, ready_for_review, edited]
     # Branch model CAME:
-    #   - master         → produzione (branch di partenza)
+    #   - master / main  → produzione (branch di partenza)
     #   - test/dev       → ambiente di sviluppo
     #   - test/staging   → ambiente di certificazione
-    # Notifica solo le PR che puntano a uno di questi tre branch (base branch).
+    # Notifica solo le PR che puntano a uno di questi branch (base branch).
     branches:
       - master
+      - main
       - test/dev
       - test/staging
 
