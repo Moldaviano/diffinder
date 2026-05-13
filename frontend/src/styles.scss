@@ -1,0 +1,431 @@
+/* ──────────────────────────────────────────────────────────────
+   CAME-inspired design system
+   Brand: cerulean #00B0ED · cod gray #151515 · neutrals
+   ────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Brand */
+  --came-blue:        #00B0ED;
+  --came-blue-600:    #009BD0;
+  --came-blue-700:    #007EAA;
+  --came-blue-50:     #E6F7FD;
+  --came-blue-100:    #C2EAFA;
+  --came-ink:         #151515;
+  --came-ink-soft:    #1F2024;
+
+  /* Neutrals */
+  --bg:               #F4F6F9;
+  --bg-elev:          #FFFFFF;
+  --surface-2:        #FAFBFD;
+  --border:           #E5E9F0;
+  --border-strong:    #D2D8E1;
+  --text:             #1A1D21;
+  --text-muted:       #5B6470;
+  --text-soft:        #8A93A0;
+
+  /* Semantic */
+  --success:          #16A34A;
+  --success-bg:       #DCFCE7;
+  --warning:          #D97706;
+  --warning-bg:       #FEF3C7;
+  --danger:           #DC2626;
+  --danger-bg:        #FEE2E2;
+  --info:             var(--came-blue);
+  --info-bg:          var(--came-blue-50);
+
+  /* Misc */
+  --radius-sm: 6px;
+  --radius:    10px;
+  --radius-lg: 14px;
+  --shadow-1:  0 1px 2px rgba(20, 32, 51, 0.04), 0 1px 3px rgba(20, 32, 51, 0.06);
+  --shadow-2:  0 4px 14px rgba(20, 32, 51, 0.08), 0 2px 4px rgba(20, 32, 51, 0.04);
+  --shadow-3:  0 12px 32px rgba(20, 32, 51, 0.12);
+
+  --sidenav-w: 248px;
+  --topbar-h:  60px;
+}
+
+/* ── Reset / base ─────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', 'Roboto', 'Helvetica Neue', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+a { color: var(--came-blue-700); text-decoration: none; }
+a:hover { color: var(--came-blue-600); text-decoration: underline; text-underline-offset: 3px; }
+
+h1, h2, h3, h4 { letter-spacing: -0.01em; color: var(--came-ink); }
+
+/* Scrollbar polish */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #cdd4df; border-radius: 8px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: #a9b2c1; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Page chrome ──────────────────────────────────────────── */
+.df-page {
+  padding: 28px 32px 56px;
+  max-width: 1400px;
+  margin: 0 auto;
+  animation: df-fade 240ms ease-out;
+}
+@keyframes df-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.df-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.df-page-header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.df-page-header .subtitle {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-top: 4px;
+  letter-spacing: 0;
+}
+
+/* ── Card grid (dashboard) ────────────────────────────────── */
+.df-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.df-kpi {
+  position: relative;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+  box-shadow: var(--shadow-1);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  overflow: hidden;
+}
+.df-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.df-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--came-blue) 0%, var(--came-blue-600) 100%);
+  opacity: 0.95;
+}
+.df-kpi .label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.df-kpi .value {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--came-ink);
+  margin-top: 6px;
+  line-height: 1.05;
+}
+.df-kpi .delta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.df-kpi .icon {
+  position: absolute;
+  right: 16px; top: 18px;
+  width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 9px;
+  background: var(--came-blue-50);
+  color: var(--came-blue-700);
+}
+.df-kpi.warning::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.df-kpi.warning .icon { background: var(--warning-bg); color: var(--warning); }
+.df-kpi.warning .value { color: var(--warning); }
+.df-kpi.danger::before  { background: linear-gradient(90deg, #ef4444, #b91c1c); }
+.df-kpi.danger .icon { background: var(--danger-bg); color: var(--danger); }
+.df-kpi.danger .value { color: var(--danger); }
+.df-kpi.success::before { background: linear-gradient(90deg, #22c55e, #15803d); }
+.df-kpi.success .icon { background: var(--success-bg); color: var(--success); }
+.df-kpi.success .value { color: var(--success); }
+
+/* ── Generic card ─────────────────────────────────────────── */
+.df-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+.df-card-head {
+  padding: 18px 22px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.df-card-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.df-card-body { padding: 18px 22px; }
+
+/* Override Material card baseline to match */
+.mat-mdc-card {
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-1) !important;
+  background: var(--bg-elev) !important;
+}
+
+/* ── Status badges ────────────────────────────────────────── */
+.df-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  line-height: 1.4;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.df-status-badge::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.df-status-draft    { background: #EEF1F6; color: #475569; border-color: #E2E8F0; }
+.df-status-in_dev   { background: var(--came-blue-50); color: var(--came-blue-700); border-color: var(--came-blue-100); }
+.df-status-in_cert  { background: var(--warning-bg); color: #92400E; border-color: #FDE68A; }
+.df-status-approved { background: var(--success-bg); color: #166534; border-color: #BBF7D0; }
+.df-status-in_prod  { background: linear-gradient(135deg, #16A34A 0%, #15803D 100%); color: #fff; border-color: transparent; }
+.df-status-in_prod::before { background: #fff; }
+.df-status-rejected { background: var(--danger-bg); color: #991B1B; border-color: #FECACA; }
+.df-status-open     { background: var(--came-blue-50); color: var(--came-blue-700); border-color: var(--came-blue-100); }
+.df-status-merged   { background: var(--success-bg); color: #166534; border-color: #BBF7D0; }
+.df-status-blocked  { background: var(--danger-bg); color: #991B1B; border-color: #FECACA; }
+.df-status-closed   { background: #EEF1F6; color: #475569; border-color: #E2E8F0; }
+
+/* ── Traffic light (envs) ─────────────────────────────────── */
+.df-traffic-light {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.df-traffic-light .dot {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #E5E9F0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.6), 0 1px 2px rgba(0,0,0,0.08);
+  transition: transform 140ms ease;
+}
+.df-traffic-light .dot:hover { transform: scale(1.1); }
+.df-traffic-light .dot.done   { background: linear-gradient(135deg, #22C55E, #16A34A); }
+.df-traffic-light .dot.cur    { background: linear-gradient(135deg, #FBBF24, #D97706);
+                                animation: df-pulse 1.6s ease-in-out infinite; }
+.df-traffic-light .dot.failed { background: linear-gradient(135deg, #F87171, #DC2626); }
+@keyframes df-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.6), 0 0 0 0 rgba(217,119,6,0.55); }
+  50%      { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.6), 0 0 0 6px rgba(217,119,6,0); }
+}
+
+/* ── Cert state text ──────────────────────────────────────── */
+.df-cert-pass { color: var(--success); font-weight: 600; }
+.df-cert-fail { color: var(--danger); font-weight: 600; }
+.df-cert-none { color: var(--text-soft); }
+
+/* ── Toolbar / utility ────────────────────────────────────── */
+.df-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+.df-spacer { flex: 1; }
+
+/* ── Tables ───────────────────────────────────────────────── */
+table.mat-mdc-table {
+  width: 100%;
+  background: var(--bg-elev) !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+}
+.mat-mdc-header-cell {
+  background: var(--surface-2);
+  color: var(--text-muted) !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border) !important;
+}
+.mat-mdc-cell { color: var(--text) !important; border-bottom: 1px solid var(--border) !important; }
+.mat-mdc-row { transition: background 120ms ease; }
+.mat-mdc-row:hover { background: var(--came-blue-50) !important; cursor: pointer; }
+.mat-mdc-row:last-child .mat-mdc-cell { border-bottom: none !important; }
+
+/* ── Timeline ─────────────────────────────────────────────── */
+.df-timeline { padding: 0; list-style: none; margin: 0; }
+.df-timeline li {
+  padding: 12px 16px 16px 24px;
+  border-left: 2px solid var(--came-blue-100);
+  margin-left: 12px;
+  position: relative;
+}
+.df-timeline li:before {
+  content: '';
+  position: absolute;
+  left: -7px; top: 16px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--came-blue);
+  box-shadow: 0 0 0 4px var(--bg-elev), 0 0 0 5px var(--came-blue-100);
+}
+
+/* ── Activity feed item ───────────────────────────────────── */
+.df-activity { display: flex; flex-direction: column; }
+.df-activity-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.df-activity-row:last-child { border-bottom: none; }
+.df-activity-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: var(--came-blue-50);
+  color: var(--came-blue-700);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.df-activity-body { flex: 1; min-width: 0; }
+.df-activity-title { font-weight: 500; color: var(--text); font-size: 14px; }
+.df-activity-meta { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.df-activity-time { color: var(--text-soft); font-size: 12px; white-space: nowrap; }
+
+/* ── Material overrides : CAME repaint ────────────────────── */
+
+/* Primary buttons */
+.mat-mdc-raised-button.mat-primary,
+.mat-mdc-unelevated-button.mat-primary,
+.mat-mdc-fab.mat-primary {
+  background-color: var(--came-blue) !important;
+  color: #fff !important;
+  box-shadow: 0 1px 2px rgba(0,176,237,0.25), 0 1px 4px rgba(0,176,237,0.15) !important;
+}
+.mat-mdc-raised-button.mat-primary:hover,
+.mat-mdc-unelevated-button.mat-primary:hover {
+  background-color: var(--came-blue-600) !important;
+  box-shadow: 0 2px 8px rgba(0,176,237,0.35) !important;
+}
+.mat-mdc-button.mat-primary { color: var(--came-blue-700) !important; }
+
+/* Toolbar – primary becomes light white with bottom border */
+.mat-toolbar.mat-primary {
+  background: var(--bg-elev) !important;
+  color: var(--text) !important;
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+}
+
+/* Inputs / form fields */
+.mat-mdc-form-field {
+  --mdc-outlined-text-field-outline-color: var(--border-strong);
+  --mdc-outlined-text-field-hover-outline-color: var(--came-blue-600);
+  --mdc-outlined-text-field-focus-outline-color: var(--came-blue);
+  --mdc-outlined-text-field-label-text-color: var(--text-muted);
+  --mdc-outlined-text-field-focus-label-text-color: var(--came-blue-700);
+  --mdc-outlined-text-field-caret-color: var(--came-blue);
+}
+
+/* Paginator */
+.mat-mdc-paginator {
+  background: transparent !important;
+  color: var(--text-muted) !important;
+}
+
+/* Selection / checkbox */
+.mat-mdc-checkbox.mat-primary {
+  --mdc-checkbox-selected-checkmark-color: #fff;
+  --mdc-checkbox-selected-focus-icon-color: var(--came-blue);
+  --mdc-checkbox-selected-hover-icon-color: var(--came-blue-600);
+  --mdc-checkbox-selected-icon-color: var(--came-blue);
+  --mdc-checkbox-selected-pressed-icon-color: var(--came-blue-700);
+}
+
+/* Tabs / progress */
+.mat-mdc-tab .mdc-tab__text-label { color: var(--text-muted); }
+.mat-mdc-tab.mdc-tab--active .mdc-tab__text-label { color: var(--came-blue-700); }
+.mdc-tab-indicator__content--underline { border-color: var(--came-blue) !important; }
+.mat-mdc-progress-spinner circle { stroke: var(--came-blue) !important; }
+.mat-mdc-progress-bar { --mdc-linear-progress-active-indicator-color: var(--came-blue); }
+
+/* Snackbar */
+.mat-mdc-snack-bar-container .mdc-snackbar__surface {
+  background: var(--came-ink) !important;
+  color: #fff !important;
+  border-radius: var(--radius) !important;
+}
+
+/* Dialog */
+.mat-mdc-dialog-container .mdc-dialog__surface {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-3) !important;
+}
+
+/* List icons */
+.mat-mdc-list-item .mat-icon { color: inherit; }
+
+/* Menu */
+.mat-mdc-menu-panel { border-radius: var(--radius) !important; box-shadow: var(--shadow-3) !important; }
+
+/* ── Helpers ──────────────────────────────────────────────── */
+.df-muted   { color: var(--text-muted); }
+.df-soft    { color: var(--text-soft); }
+.df-mono    { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+.df-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--came-blue-50); color: var(--came-blue-700);
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600;
+}
+.df-divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* Inline code (commit shas etc.) */
+code, .df-code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: var(--came-ink);
+}

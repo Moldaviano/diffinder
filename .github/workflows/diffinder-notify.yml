@@ -1,0 +1,142 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Diffinder – workflow di notifica (NON bloccante)
+#
+# Cosa fa:
+#   Ogni volta che una pull request viene aperta, aggiornata, riaperta, chiusa
+#   o mergiata su questo repo, invia un evento firmato a Diffinder così che
+#   release / PR / cert-check vengano popolati nella console.
+#
+# Cosa NON fa:
+#   Non blocca il merge anche se Diffinder risponde con `passed=false`. È un
+#   workflow di pura osservabilità. Per la variante che blocca il PR vedi
+#   `diffinder-cert-check.yml` nello stesso folder.
+#
+# Installazione:
+#   1. Copia questo file nel repo target come `.github/workflows/diffinder-notify.yml`.
+#   2. Su GitHub → Settings → Secrets and variables → Actions, aggiungi:
+#        - DIFFINDER_URL              (es. https://diffinder.alloy.it)
+#        - DIFFINDER_WEBHOOK_SECRET   (stessa stringa di GITHUB_WEBHOOK_SECRET lato server)
+#      Suggerimento: usali come **Organization secret** così non li devi
+#      ri-configurare repo per repo.
+#   3. Apri/aggiorna una PR e controlla i log del backend Diffinder:
+#        docker logs -f diffinder-backend | grep webhooks
+# ─────────────────────────────────────────────────────────────────────────────
+name: diffinder-notify
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed, ready_for_review, edited]
+    # Rimuovi il filtro `branches` se vuoi notificare le PR verso QUALSIASI base.
+    # Lasciato così, notifica solo le PR verso main / master / test/*.
+    branches:
+      - main
+      - master
+      - "test/**"
+
+# Concurrency: se arrivano più push ravvicinati alla stessa PR, cancella i job
+# precedenti per non inondare Diffinder di webhook duplicati.
+concurrency:
+  group: diffinder-notify-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  notify:
+    name: Notify Diffinder
+    runs-on: ubuntu-latest
+    # Non far fallire il workflow se Diffinder è momentaneamente irraggiungibile.
+    # Il PR resta verde: questo è il workflow "observability", non "gating".
+    continue-on-error: true
+    timeout-minutes: 2
+
+    steps:
+      - name: Sanity check – secrets present
+        env:
+          DIFFINDER_URL: ${{ secrets.DIFFINDER_URL }}
+          DIFFINDER_WEBHOOK_SECRET: ${{ secrets.DIFFINDER_WEBHOOK_SECRET }}
+        run: |
+          if [ -z "$DIFFINDER_URL" ] || [ -z "$DIFFINDER_WEBHOOK_SECRET" ]; then
+            echo "::warning::DIFFINDER_URL or DIFFINDER_WEBHOOK_SECRET secret is missing — skipping."
+            exit 0
+          fi
+
+      - name: Build payload
+        id: payload
+        env:
+          REPO_FULL: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          # Costruisce il JSON compatto (nessuna newline) usando jq.
+          PAYLOAD=$(jq -nc \
+            --arg repo "https://github.com/${REPO_FULL}" \
+            --argjson pr_number "${PR_NUMBER}" \
+            --arg head_sha "${HEAD_SHA}" \
+            --arg base_branch "${BASE_BRANCH}" \
+            --arg head_branch "${HEAD_BRANCH}" \
+            --arg pr_url "${PR_URL}" \
+            '{repo:$repo, pr_number:$pr_number, head_sha:$head_sha, base_branch:$base_branch, head_branch:$head_branch, pr_url:$pr_url}')
+
+          # Salva su file per evitare problemi di escaping con caratteri speciali nella branch name.
+          printf '%s' "$PAYLOAD" > payload.json
+
+          # Esponi il path al prossimo step.
+          echo "path=payload.json" >> "$GITHUB_OUTPUT"
+
+      - name: Sign payload (HMAC-SHA256)
+        id: sign
+        env:
+          SECRET: ${{ secrets.DIFFINDER_WEBHOOK_SECRET }}
+          PAYLOAD_PATH: ${{ steps.payload.outputs.path }}
+        run: |
+          SIG=$(openssl dgst -sha256 -hmac "$SECRET" -hex "$PAYLOAD_PATH" | awk '{print $2}')
+          # Maschera la firma nei log (non è un segreto, ma non serve esporla).
+          echo "::add-mask::$SIG"
+          echo "sig=sha256=$SIG" >> "$GITHUB_OUTPUT"
+
+      - name: POST to Diffinder
+        env:
+          DIFFINDER_URL: ${{ secrets.DIFFINDER_URL }}
+          SIG: ${{ steps.sign.outputs.sig }}
+          PAYLOAD_PATH: ${{ steps.payload.outputs.path }}
+        run: |
+          set -o pipefail
+          echo "→ POST ${DIFFINDER_URL}/api/webhooks/github/pr"
+          echo "  payload:"
+          cat "$PAYLOAD_PATH" | jq .
+
+          HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" \
+            --max-time 20 --retry 3 --retry-delay 4 --retry-connrefused \
+            -X POST "${DIFFINDER_URL}/api/webhooks/github/pr" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: ${SIG}" \
+            --data-binary "@${PAYLOAD_PATH}" || echo "000")
+
+          echo "← HTTP $HTTP_CODE"
+          echo "  response:"
+          cat response.json || true
+          echo
+
+          case "$HTTP_CODE" in
+            2*)
+              echo "::notice::Diffinder notified ✓"
+              ;;
+            401)
+              echo "::error::Webhook signature rejected — controlla DIFFINDER_WEBHOOK_SECRET su entrambi i lati."
+              ;;
+            404)
+              echo "::warning::Diffinder non riconosce questo repo o la release/branch. Verifica i progetti registrati in Diffinder."
+              ;;
+            000)
+              echo "::warning::Diffinder irraggiungibile — il workflow continua comunque (notify-only)."
+              ;;
+            *)
+              echo "::warning::Risposta inattesa da Diffinder ($HTTP_CODE) — vedi log."
+              ;;
+          esac

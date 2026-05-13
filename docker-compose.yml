@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: diffinder-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-diffinder}
+      POSTGRES_USER: ${DB_USER:-diffinder}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-diffinder}
+    ports:
+      - "5432:5432"
+    volumes:
+      - diffinder-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-diffinder} -d ${DB_NAME:-diffinder}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    container_name: diffinder-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations
+    command: >
+      -path=/migrations
+      -database=postgres://${DB_USER:-diffinder}:${DB_PASSWORD:-diffinder}@postgres:5432/${DB_NAME:-diffinder}?sslmode=disable
+      up
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: diffinder-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-diffinder}
+      DB_USER: ${DB_USER:-diffinder}
+      DB_PASSWORD: ${DB_PASSWORD:-diffinder}
+      DB_SSLMODE: disable
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 168h
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-dev-webhook-secret}
+      CORS_ALLOWED_ORIGINS: http://localhost:4200,http://127.0.0.1:4200
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: diffinder-frontend
+    depends_on:
+      - backend
+    ports:
+      - "4200:80"
+
+volumes:
+  diffinder-pg:

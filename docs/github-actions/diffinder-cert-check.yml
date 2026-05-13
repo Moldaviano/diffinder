@@ -1,0 +1,102 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Diffinder – workflow di cert-check (BLOCCANTE)
+#
+# Identico a `diffinder-notify.yml` ma:
+#   - rimuove `continue-on-error: true`
+#   - fa fallire il PR se Diffinder risponde con `passed=false`
+#
+# Usalo SOLO quando:
+#   - Diffinder è raggiungibile in modo affidabile (non un ngrok in dev)
+#   - i progetti e le release sono già configurati correttamente nella console
+#   - il team è abituato a vedere checks Diffinder bloccare i merge
+#
+# Per attivarlo: copia in `.github/workflows/diffinder-cert-check.yml` nel
+# repo target. Considera di proteggere il branch su GitHub richiedendo che
+# questo check passi prima del merge (Settings → Branches → branch protection).
+# ─────────────────────────────────────────────────────────────────────────────
+name: diffinder-cert-check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    # Branch model CAME: master (prod) · test/dev (sviluppo) · test/staging (cert)
+    branches:
+      - master
+      - test/dev
+      - test/staging
+
+concurrency:
+  group: diffinder-cert-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  cert-check:
+    name: Diffinder cert check
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Build payload
+        id: payload
+        env:
+          REPO_FULL: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          jq -nc \
+            --arg repo "https://github.com/${REPO_FULL}" \
+            --argjson pr_number "${PR_NUMBER}" \
+            --arg head_sha "${HEAD_SHA}" \
+            --arg base_branch "${BASE_BRANCH}" \
+            --arg head_branch "${HEAD_BRANCH}" \
+            --arg pr_url "${PR_URL}" \
+            '{repo:$repo, pr_number:$pr_number, head_sha:$head_sha, base_branch:$base_branch, head_branch:$head_branch, pr_url:$pr_url}' \
+            > payload.json
+          echo "path=payload.json" >> "$GITHUB_OUTPUT"
+
+      - name: Sign payload (HMAC-SHA256)
+        id: sign
+        env:
+          SECRET: ${{ secrets.DIFFINDER_WEBHOOK_SECRET }}
+          PAYLOAD_PATH: ${{ steps.payload.outputs.path }}
+        run: |
+          SIG=$(openssl dgst -sha256 -hmac "$SECRET" -hex "$PAYLOAD_PATH" | awk '{print $2}')
+          echo "::add-mask::$SIG"
+          echo "sig=sha256=$SIG" >> "$GITHUB_OUTPUT"
+
+      - name: Call Diffinder
+        env:
+          DIFFINDER_URL: ${{ secrets.DIFFINDER_URL }}
+          SIG: ${{ steps.sign.outputs.sig }}
+          PAYLOAD_PATH: ${{ steps.payload.outputs.path }}
+        run: |
+          set -eo pipefail
+          HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" \
+            --max-time 20 --retry 3 --retry-delay 4 --retry-connrefused \
+            -X POST "${DIFFINDER_URL}/api/webhooks/github/pr" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: ${SIG}" \
+            --data-binary "@${PAYLOAD_PATH}")
+
+          echo "HTTP $HTTP_CODE"
+          cat response.json
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Diffinder returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          PASSED=$(jq -r '.passed' response.json)
+          REASON=$(jq -r '.reason // ""' response.json)
+          if [ "$PASSED" != "true" ]; then
+            echo "::error::Cert check failed: $REASON"
+            exit 1
+          fi
+          echo "::notice::Cert check passed ✓"

@@ -1,0 +1,5 @@
+# Questo file è stato sostituito dai workflow versionati in
+# `docs/github-actions/`. Vedi `docs/github-actions/README.md` per il setup.
+#
+# - `docs/github-actions/diffinder-notify.yml`     – notify-only (raccomandato)
+# - `docs/github-actions/diffinder-cert-check.yml` – cert-check bloccante
