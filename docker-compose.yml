@@ -50,7 +50,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-diffinder}
       DB_SSLMODE: disable
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
-      JWT_ACCESS_TTL: 15m
+      JWT_ACCESS_TTL: 2h
       JWT_REFRESH_TTL: 168h
       # Secret VERIFICATO al boot: se manca in .env il backend non parte.
       # Tienilo identico al secret `DIFFINDER_WEBHOOK_SECRET` configurato in GitHub Actions.
