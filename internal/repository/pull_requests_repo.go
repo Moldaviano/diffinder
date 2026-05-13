@@ -60,10 +60,14 @@ func (r *PullRequestsRepo) GetByReleaseAndNumber(ctx context.Context, releaseID 
 }
 
 func (r *PullRequestsRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status model.PRStatus) error {
+	// $2 viene castato esplicitamente a pr_status: il confronto con il literal
+	// 'merged' nel CASE altrimenti spinge pgx a inferire $2 come text, e
+	// Postgres rifiuta l'assegnazione `status = $2` (column is pr_status).
 	_, err := r.db.Pool.Exec(ctx, `
 		UPDATE pull_requests
-		   SET status = $2,
-		       merged_at = CASE WHEN $2 = 'merged' AND merged_at IS NULL THEN NOW() ELSE merged_at END
+		   SET status    = $2::pr_status,
+		       merged_at = CASE WHEN $2::pr_status = 'merged'::pr_status AND merged_at IS NULL
+		                        THEN NOW() ELSE merged_at END
 		 WHERE id = $1`, id, status)
 	return err
 }

@@ -56,14 +56,14 @@ func (r *ReleasesRepo) GetByProjectAndBranch(ctx context.Context, projectID uuid
 func (r *ReleasesRepo) Update(ctx context.Context, rel *model.Release) error {
 	const q = `
 		UPDATE releases
-		   SET title = $2, description = $3, status = $4
+		   SET title = $2, description = $3, status = $4::release_status
 		 WHERE id = $1
 		 RETURNING updated_at`
 	return r.db.Pool.QueryRow(ctx, q, rel.ID, rel.Title, rel.Description, rel.Status).Scan(&rel.UpdatedAt)
 }
 
 func (r *ReleasesRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status model.ReleaseStatus) error {
-	_, err := r.db.Pool.Exec(ctx, `UPDATE releases SET status = $2 WHERE id = $1`, id, status)
+	_, err := r.db.Pool.Exec(ctx, `UPDATE releases SET status = $2::release_status WHERE id = $1`, id, status)
 	return err
 }
 
