@@ -48,7 +48,7 @@ Diffinder fornisce:
 
 | Componente | Tech | Ruolo |
 |------------|------|-------|
-| **Frontend** | Angular 18 standalone + Material + Signals | UI, autenticazione utente, dashboard, CRUD |
+| **Frontend** | Angular 18 standalone + Material + Signals · design system CAME (cerulean #00B0ED, Inter) | UI, autenticazione utente, dashboard, CRUD |
 | **Backend** | Go 1.22, Chi, pgx, slog | API REST `/api/*` + webhook `/api/webhooks/github/pr` |
 | **DB** | PostgreSQL 16 | Persistenza |
 | **Migrations** | golang-migrate | Schema evolution |
@@ -245,22 +245,29 @@ migrations/
 └── 0001_init.down.sql
 
 docs/
-└── github-actions-example.yml  workflow di riferimento
+├── github-actions-example.yml          legacy redirect → punta a github-actions/
+└── github-actions/
+    ├── diffinder-notify.yml            workflow notify-only (non bloccante)
+    ├── diffinder-cert-check.yml        workflow cert-check bloccante
+    └── README.md                       setup, secrets, troubleshooting
 ```
 
 ### Frontend Angular
 
 ```
 src/
-├── index.html                root + font + Material icons
+├── index.html                root + Google Fonts (Inter + JetBrains Mono) + Material icons
 ├── main.ts                   bootstrapApplication standalone
-├── styles.scss               classi SCSS shared, palette badge/semafori
+├── styles.scss               design system CAME: palette (cerulean #00B0ED, ink #151515),
+│                             tipografia Inter, KPI card, badge a pill, traffic light animati,
+│                             override Material (button, toolbar, inputs, tabs, snackbar)
 └── app/
     ├── app.component.ts      shell con <router-outlet>
     ├── app.config.ts         provider router + http(interceptors) + animations
     ├── app.routes.ts         lazy loading per ogni feature, guard auth/admin
     ├── layout/
-    │   └── shell.component.ts    sidenav + toolbar + menu utente
+    │   └── shell.component.ts    sidenav scura CAME (logo wordmark, accent glow su
+    │                             item attivo) + topbar bianca con avatar pill
     ├── core/
     │   ├── environment.ts        apiBase = '/api'
     │   ├── models/index.ts       mirror TS dei tipi backend
@@ -414,7 +421,7 @@ Schema completo in `migrations/0001_init.up.sql`. Punti chiave:
 |---------|-------------|
 | **SQL injection** | Tutte le query usano parametri pgx posizionali. Nessuna concatenazione. |
 | **Brute force login** | bcrypt cost di default. (Rate-limit non implementato — eventuale aggiunta in middleware.) |
-| **Token theft** | Access TTL corto (15m default). Refresh separato con TTL più lungo (7gg). Tipo del token discriminato nelle claims (`access` vs `refresh`). |
+| **Token theft** | Access TTL configurabile (default Go `15m`, override compose `2h`). Refresh separato con TTL più lungo (7gg). Tipo del token discriminato nelle claims (`access` vs `refresh`). |
 | **Token forging** | HS256 con secret server-side non esposto. JWT firmati e verificati con `jwt/v5`. Algorithm pinning (`SigningMethodHMAC` only). |
 | **Cross-site requests** | CORS chiuso: solo origini in `CORS_ALLOWED_ORIGINS`. |
 | **Webhook spoofing** | HMAC-SHA256 con `hmac.Equal` (constant-time). Body letto come bytes prima del parsing JSON così la firma include l'intero payload. |
